@@ -1,0 +1,15 @@
+This model is based on data collected from [1].
+It represents a single feeder from a much larger collection with the following changes:
+
+* Removed disconnected lines to eliminate zero voltage buses
+* Used openDSS save circuit to export cleaner model files
+* Renamed master.dss to main.dss
+* Created pu demand profile based on full year run using all profiles from total S
+* Created average solar profile from all provided solar profiles
+
+It should be noted that data in this directory is licensed under CC BY 4.0. To view a copy of this license, visit https://creativecommons.org/licenses/by/4.0/
+
+No other licenses in this repository apply to this data.
+
+Citation:
+[1] National Renewable Energy Laboratory (NREL). (2020). SMART-DS Synthetic Electrical Network Data OpenDSS Models for SFO, GSO, and AUS [data set]. Retrieved from https://data.openei.org/submissions/2981.

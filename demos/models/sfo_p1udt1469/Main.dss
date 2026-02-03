@@ -1,0 +1,12 @@
+Clear
+New Circuit.feeder_p1udt1469-p1uhs0_1247x
+
+Redirect Vsource.dss
+Redirect LineCode.dss
+Redirect Branches.dss
+Redirect Transformers.dss
+Redirect Loads.dss
+Redirect Capacitors.dss
+Redirect EnergyMeter.dss
+Redirect BusVoltageBases.dss  ! set voltage bases
+Buscoords BusCoords.dss

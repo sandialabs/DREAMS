@@ -49,13 +49,13 @@ Created by Thad Haines - jthaine@sandia.gov.
 * TBD
 
 ## Contributing
-Open and ongoing.
+* Open and ongoing.
 
-## Authors and acknowledgment
-* Ongoing
+## Acknowledgments
+* `sfo_p1udt1469` model included in this repository adapated from data [available here](https://data.openei.org/submissions/2981).
 
 ## License
-MIT
+* MIT
 
 ## Project status
 * TBD

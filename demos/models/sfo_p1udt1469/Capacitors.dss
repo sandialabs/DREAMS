@@ -1,0 +1,4 @@
+New "Capacitor.p1uc3" bus1=p1umv8 phases=3 kv=12.47 conn=Wye kvar=[ 300]
+New "CapControl.p1uc3" capacitor=p1uc3 element=Line.padswitch(r:p1udt101-p1umv8)p1u_9238 terminal=1 Delay=100.0 type=voltage Vmin=120.5 Vmax=125.0 PTratio=59.99631547328862 CTratio=100.0
+New "Capacitor.p1uc7" bus1=p1udt281 phases=3 kv=12.47 conn=Wye kvar=[ 300]
+New "CapControl.p1uc7" capacitor=p1uc7 element=Line.padswitch(r:p1udt281-p1udt283)p1u_9332 terminal=1 Delay=100.0 type=voltage Vmin=120.5 Vmax=125.0 PTratio=59.99631547328862 CTratio=100.0
