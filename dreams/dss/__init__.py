@@ -10,9 +10,6 @@ from .dss import gen_min_max_ave_voltages_and_capacity
 from .dss import get_feeder_counts
 from .dss import get_short_pde_name
 from .dss import get_short_bus_name
-from .dss import collect_feeder_data
-from .dss import collect_feeder_voltages
-from .dss import collect_feeder_lines
 from .dss import get_losses_per_phase_df
 from .dss import reset_relays
 

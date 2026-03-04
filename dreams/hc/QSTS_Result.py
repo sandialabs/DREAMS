@@ -368,8 +368,15 @@ class QSTSStepResult():
         p_columns = ['P1_kW', 'P2_kW', 'P3_kW']
         q_columns = ['Q1_kVAR', 'Q2_kVAR', 'Q3_kVAR']
 
+        i_cols = ['I1', 'I2', 'I3']
+        v_cols = ['V1', 'V2', 'V3']
+
         qsts_time['substation_p_kw'] = self.monitors['vsource'].df[p_columns].sum(axis=1) * -1.0
         qsts_time['substation_q_kvar'] = self.monitors['vsource'].df[q_columns].sum(axis=1) * -1.0
+
+        qsts_time['substation_v_ave'] = self.monitors['vsource'].df[v_cols].mean(axis=1)
+        qsts_time['substation_i_ave'] = self.monitors['vsource'].df[i_cols].mean(axis=1)
+
 
         combined_res = pd.merge(
             extremes,
