@@ -68,7 +68,6 @@ class StorageControl():
         if self.parameter_dictionary['modedischarge'] == 'time':
             del self.parameter_dictionary['kwtarget']
             del self.parameter_dictionary['daily']
-            del self.parameter_dictionary['kwtargetlow']
             del self.parameter_dictionary['%kwband']
             del self.parameter_dictionary['%kwbandlow']
             # del self.parameter_dictionary['inhibittime']

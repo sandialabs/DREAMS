@@ -653,6 +653,19 @@ def get_storage_df():
 
     storage_df.index.rename('name', inplace=True)
 
+    # ensure correct dtypes of numeric columns
+    numeric_cols = [
+        'n_phases',
+        'kv',
+        'kva',
+        'kwh_rated',
+        'percent_kwh_reserve',
+        'percent_kwh_stored',
+        'model',
+    ]
+    for col in numeric_cols:
+        storage_df[col] = pd.to_numeric(storage_df[col])
+
     return storage_df
 
 
