@@ -295,7 +295,8 @@ class NodalSnapshot():
 class NodalSnapshot2():
     """
     class to perform nodal hosting capacity
-    but specifically for medium voltage select buses.
+    designed specifically for medium voltage select buses.
+
     """
 
     def __init__(
@@ -306,6 +307,7 @@ class NodalSnapshot2():
             bus_names=None,
             constraint=None,
             threshold=1,  # kw for convergence
+            hc_kind='load'
             ):
 
         self.feeder = feeder
@@ -314,6 +316,7 @@ class NodalSnapshot2():
         self.constraint = constraint
         self.execution_time = 0.0
         self.threshold = threshold
+        self.hc_kind = hc_kind
 
         if run:
             self.result_df = self.run()
@@ -363,21 +366,29 @@ class NodalSnapshot2():
 
             self.feeder.restart()
             long_bus = bus_name + "." + ".".join(bus_row['phases'])
-
+            n_phases = bus_row['n_phases']
             # handle line kv
-            if bus_row['n_phases'] > 1:
+            if n_phases > 1:
                 scaled_kv = bus_row['kv_base'] * 3**(1/2)
             else:
                 scaled_kv = bus_row['kv_base']
 
-            # add small load for lower bound
-            non_vhc_kw = 0.06
-            load_line = f"New load.hc_{bus_name} " \
-                f"bus1={long_bus} kV={scaled_kv} phases={bus_row['n_phases']} "\
-                f"Vmaxpu=2 Vminpu=0.7 conn=wye "\
-                f"kW={non_vhc_kw} kvar=0"
+            # add small asset for lower bound
+            if self.hc_kind == 'load':
+                non_vhc_kw = 0.06
+                load_line = f"New load.hc_{bus_name} " \
+                    f"bus1={long_bus} kV={scaled_kv} phases={n_phases} "\
+                    f"Vmaxpu=2 Vminpu=0.7 conn=wye "\
+                    f"kW={non_vhc_kw} kvar=0"
+                dreams.dss.cmd(load_line)
+            else:
+                non_vhc_kw = 0.1
+                pv_line = f"new pvsystem.hc_{bus_name} " \
+                    f"bus1={long_bus} kv={scaled_kv} phases={n_phases} "\
+                    f"kva={non_vhc_kw} pmpp={non_vhc_kw} conn=wye model=1 "\
+                    f"irradiance=1 vmaxpu=2 vminpu=0.1 %r=0.0 balanced=yes"
+                dreams.dss.cmd(pv_line)
 
-            dreams.dss.cmd(load_line)
             dreams.dss.cmd('solve')
             last_violations = dreams.dss.check_violations()
 
@@ -403,9 +414,17 @@ class NodalSnapshot2():
                     last_violations = dreams.dss.check_violations()
                     break
 
-                # modify load
-                load_line = f"edit load.hc_{bus_name} kW={vhc_kw}"
-                dreams.dss.cmd(load_line)
+                # modify asset
+                if self.hc_kind == 'load':
+                    load_line = f"edit load.hc_{bus_name} kW={vhc_kw}"
+                    dreams.dss.cmd(load_line)
+                else:
+                    pv_line = f"edit pvsystem.hc_{bus_name} kva={vhc_kw}"
+                    dreams.dss.cmd(pv_line)
+                    pv_line = f"edit pvsystem.hc_{bus_name} pmpp={vhc_kw}"
+                    dreams.dss.cmd(pv_line)
+                    break
+
                 dreams.dss.cmd('solve')
                 n += 1
 
@@ -431,9 +450,17 @@ class NodalSnapshot2():
                     break
 
                 mid_point = (non_vhc_kw + vhc_kw) / 2
-                load_line = f"edit load.hc_{bus_name} kW={mid_point}"
 
-                dreams.dss.cmd(load_line)
+                # set asset to mid point value
+                if self.hc_kind == 'load':
+                    load_line = f"edit load.hc_{bus_name} kW={mid_point}"
+                    dreams.dss.cmd(load_line)                    
+                else:
+                    pv_line = f"edit pvsystem.hc_{bus_name} kva={mid_point}"
+                    dreams.dss.cmd(pv_line)
+                    pv_line = f"edit pvsystem.hc_{bus_name} pmpp={mid_point}"
+                    dreams.dss.cmd(pv_line)
+
                 dreams.dss.cmd('solve')
                 n += 1
 
