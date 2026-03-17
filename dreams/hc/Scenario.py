@@ -158,14 +158,21 @@ class Scenario():
             for redirect in self.base_redirects:
                 redirect.execute()
 
-    def add_control_redirect(self, control_redirect, start_step=1):
+    def add_control_redirect(
+            self,
+            control_redirect,
+            start_step=1,
+            stop_step=None):
         """ add control redirect to dictionary while accounting
         for optional start step that is not 1
         """
+        if stop_step is None:
+            stop_step = self.n_steps + 1
         name = control_redirect.name
         self.control_redirects[name] = {}
         self.control_redirects[name]['redirect'] = control_redirect
         self.control_redirects[name]['start_step'] = start_step
+        self.control_redirects[name]['stop_step'] = stop_step
 
     def execute_control_redirects(self, step):
         """
@@ -173,7 +180,7 @@ class Scenario():
         """
         if len(self.control_redirects) != 0:
             for redirect in self.control_redirects.values():
-                if step >= redirect['start_step']:
+                if step >= redirect['start_step'] and step < redirect['stop_step'] :
                     redirect['redirect'].execute()
 
     def create_simulation_seeds(self):
