@@ -26,7 +26,6 @@ from .QSTS_Result import QSTSScenarioResult
 from .read_scenario import read_qsts_scenario
 
 from .nodal_snapshot import NodalSnapshot
-from .nodal_snapshot import NodalSnapshot2
 
 # nested imports
 # of the form: from . import fileName
