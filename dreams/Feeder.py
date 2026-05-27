@@ -79,6 +79,7 @@ class Feeder:
             self.update()  # TODO handle
         else:
             self.stats = None
+            self.stats_df = None
 
         # NOTE: this needs to be reworked post updated df collection
         if create_graph:
@@ -105,6 +106,15 @@ class Feeder:
         self.update_powers()
         self.collect_element_dfs()  # NOTE: may not really need to be done
         self.stats = self.collect_feeder_stats()
+
+        stats_temp = self.stats.copy()
+        # remove non- numeric values, set feeder name as column name
+        keys_to_drop = ['kv_levels','path','name']
+        for key in keys_to_drop:
+            name = stats_temp.pop(key)
+        stats_df = pd.DataFrame.from_dict(stats_temp, orient='index')
+        stats_df.rename(columns={0:name}, inplace=True)
+        self.stats_df = stats_df
 
     def solve(self,
               set_mode=False,

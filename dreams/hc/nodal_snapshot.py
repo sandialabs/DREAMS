@@ -242,18 +242,23 @@ class NodalSnapshot():
             return self._plot_hc(**kwargs)
         elif kind == 'iter':
             return self._plot_iterations(**kwargs)
+        elif kind == 'violation':
+            return self._plot_violations(**kwargs)
         else:
-            print("Valid kind: 'hc', 'iter' ")
+            print("Valid kind: 'hc', 'iter', 'violation' ")
 
     def _plot_hc(
         self,
         ax=None,
-        sortby='dist',
+        sort=False,
+        y_min=None,
         **kwargs
         ):
-
-        fig = plt.figure()
+        """
+        Plot hosting capacity values, optionally sort by value
+        """
         if ax is None:
+            fig = plt.figure()
             ax = plt.gca()
 
         results = self.result_df
@@ -263,36 +268,44 @@ class NodalSnapshot():
 
         col = f'{constraint}_hc_kw'
         
-        # by value
-        if sortby == 'dist':
-            result_ax = results.sort_values(['bus_dist_km'])[col].reset_index().plot(
+        if sort:
+            results.sort_values(col, ascending=False)[col].reset_index().plot(
                 grid=True,
                 ax=ax,
                 linestyle='',
-                marker='o'
+                marker='o',
                 )
-            result_ax.set_xlabel('Distance from Substation [km]')
-
+            ax.set_xlabel('Bus Count')
         else:
-            result_ax = results.sort_values(col)[col].reset_index().plot(
-                grid=True,
-                ax=ax,
-                linestyle='',
-                marker='o'
+            ax.scatter(
+                x=results['bus_dist_km'],
+                y=results[col],
+                # linestyle='',
+                marker='o',
+                label=col,
                 )
-            result_ax.set_xlabel('Bus Count')
+            ax.set_xlabel('Distance from Substation [km]')
 
-        result_ax.set_ylabel('Hosting Capacity [kW]')
-        result_ax.set_title(f'{constraint.capitalize()} Hosting Capacity\n{hc_kind.upper()} ')
-        return result_ax
+        ax.set_ylabel('Hosting Capacity [kW]')
+        ax.set_title(f'{constraint.capitalize()} Hosting Capacity\n{hc_kind.upper()} ')
+
+        ax.grid(True)
+        ax.set_axisbelow(True)
+        ax.legend()
+
+        if y_min is not None:
+            ylims = ax.get_ylim()
+            ax.set_ylim([y_min, ylims[1]])
+
+        return ax
 
     def _plot_iterations(
         self,
         ax=None,
         **kwargs
         ):
-        fig = plt.figure()
         if ax is None:
+            fig = plt.figure()
             ax = plt.gca()
 
         results = self.result_df
@@ -305,3 +318,86 @@ class NodalSnapshot():
         result_ax.set_xlabel('Bus Count')
         result_ax.set_title('Nodal Hosting Capacity Iterations')
         return result_ax
+
+    def _plot_violations(
+            self,
+            ax=None,
+            y_min=None,
+            **kwargs,
+        ):
+        """
+        plot hosting capacity sorted by distance with violation color coding
+        """
+        if ax is None:
+            fig = plt.figure()
+            ax = plt.gca()
+
+        res = self.result_df
+        constraint = self.constraint
+
+        if constraint[0] == 't':
+            full_type = 'thermal'
+            xfmr_mask = res['xfmr_overload'] & ~res['line_overload']
+            line_mask = ~res['xfmr_overload'] & res['line_overload']
+            both_mask = res['xfmr_overload'] & res['line_overload']
+
+            # handle line / xfmr
+            # handle over/under voltage
+            if sum(xfmr_mask) > 0:
+                ax.scatter(
+                    x=res[xfmr_mask]['bus_dist_km'],
+                    y=res[xfmr_mask][f'{full_type}_hc_kw'],
+                    color='green',
+                    alpha=0.666,
+                    label=f"{constraint.capitalize()} Constrained - Transformer",
+                )
+            if sum(line_mask) > 0:
+                ax.scatter(
+                    x=res[line_mask]['bus_dist_km'],
+                    y=res[line_mask][f'{full_type}_hc_kw'],
+                    color='grey',
+                    alpha=0.666,
+                    label=f"{constraint.capitalize()} Constrained - Line",
+                )
+            if sum(both_mask) > 0:
+                ax.scatter(
+                    x=res[both_mask]['bus_dist_km'],
+                    y=res[both_mask][f'{full_type}_hc_kw'],
+                    color='red',
+                    alpha=0.666,
+                    label=f"{constraint.capitalize()} Constrained - Both",
+                )
+        else:
+            full_type = 'voltage'
+            ov_mask = res['over_voltage']
+            uv_mask = res['under_voltage']
+
+            # handle over/under voltage
+            if sum(ov_mask) > 0:
+                ax.scatter(
+                    x=res[ov_mask]['bus_dist_km'],
+                    y=res[ov_mask][f'{full_type}_hc_kw'],
+                    color='magenta',
+                    alpha=0.666,
+                    label=f"{constraint.capitalize()} Constrained - Over Voltage",
+                )
+            if sum(uv_mask) > 0:
+                ax.scatter(
+                    x=res[uv_mask]['bus_dist_km'],
+                    y=res[uv_mask][f'{full_type}_hc_kw'],
+                    color='cyan',
+                    alpha=0.666,
+                    label=f"{constraint.capitalize()} Constrained - Under Voltage",
+                )
+
+        ax.set_ylabel("Hosting Capacity [kw]")
+        ax.set_xlabel("Distance from Substation [km]")
+        ax.grid(True)
+        ax.set_axisbelow(True)
+        ax.legend()
+
+        if y_min is not None:
+            ylims = ax.get_ylim()
+            ax.set_ylim([y_min, ylims[1]])
+
+        return ax
