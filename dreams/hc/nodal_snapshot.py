@@ -251,6 +251,7 @@ class NodalSnapshot():
         self,
         ax=None,
         sort=False,
+        y_min=None,
         **kwargs
         ):
         """
@@ -292,6 +293,10 @@ class NodalSnapshot():
         ax.set_axisbelow(True)
         ax.legend()
 
+        if y_min is not None:
+            ylims = ax.get_ylim()
+            ax.set_ylim([y_min, ylims[1]])
+
         return ax
 
     def _plot_iterations(
@@ -317,6 +322,7 @@ class NodalSnapshot():
     def _plot_violations(
             self,
             ax=None,
+            y_min=None,
             **kwargs,
         ):
         """
@@ -383,11 +389,15 @@ class NodalSnapshot():
                     alpha=0.666,
                     label=f"{constraint.capitalize()} Constrained - Under Voltage",
                 )
-        
+
         ax.set_ylabel("Hosting Capacity [kw]")
         ax.set_xlabel("Distance from Substation [km]")
         ax.grid(True)
         ax.set_axisbelow(True)
         ax.legend()
+
+        if y_min is not None:
+            ylims = ax.get_ylim()
+            ax.set_ylim([y_min, ylims[1]])
 
         return ax
