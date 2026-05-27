@@ -1,8 +1,8 @@
-![DREAMS ai Logo](./images/20250508-dreams_ai_logo.png)
+![DREAMS ai Logo](./images/20260504-dreams_clouds_logo.png)
 
 # DREAMS
 
-DREAMS stands for Distributed Renewable Energy Analysis and Mapping Suite. 
+DREAMS stands for Distribution System Energy Analysis and Mapping Suite. 
 
 DREAMS is a Python package intended to facilitate the creation, simulation, 
 and analysis of snapshot and quasi-static time series hosting capacity 
