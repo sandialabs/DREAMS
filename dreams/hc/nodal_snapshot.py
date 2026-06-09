@@ -28,6 +28,8 @@ class NodalSnapshot():
             capacity_limit=100,
             over_voltage_limit=1.05,
             under_voltage_limit=0.95,
+            mode=None,
+            at_sec=None,
             ):
 
         self.feeder = feeder
@@ -43,10 +45,28 @@ class NodalSnapshot():
         self.over_voltage_limit = over_voltage_limit
         self.under_voltage_limit = under_voltage_limit
 
+        self.mode = mode
+        self.at_sec = at_sec
+
         if run:
             self.result_df = self.run()
         else:
             self.result_df = None
+
+    def solve(self):
+        if self.mode is not None:
+            # handle setting of mode
+            dreams.dss.cmd(f'set mode={self.mode}')
+
+        if self.at_sec is not None:
+            # handle setting of time
+            dreams.dss.cmd('set number=1')
+            dreams.dss.cmd('set stepsize=1')
+            dreams.dss.cmd('set hour=0')
+            dreams.dss.cmd('set min=0')
+            dreams.dss.cmd(f'set sec={int(self.at_sec)}')
+
+        dreams.dss.cmd('solve')
 
     def has_voltage_violation(self):
         violations = dreams.dss.check_violations(
@@ -126,7 +146,7 @@ class NodalSnapshot():
                     f"irradiance=1 vmaxpu=2 vminpu=0.1 %r=0.0 balanced=yes"
                 dreams.dss.cmd(pv_line)
 
-            dreams.dss.cmd('solve')
+            self.solve()
 
             # get bus distance
             dss.Circuit.SetActiveBus(bus_name)
@@ -167,7 +187,8 @@ class NodalSnapshot():
                     dreams.dss.cmd(pv_line)
                     break
 
-                dreams.dss.cmd('solve')
+                self.solve()
+
                 n += 1
 
                 last_violations = dreams.dss.check_violations()
@@ -203,7 +224,7 @@ class NodalSnapshot():
                     pv_line = f"edit pvsystem.hc_{bus_name} pmpp={mid_point}"
                     dreams.dss.cmd(pv_line)
 
-                dreams.dss.cmd('solve')
+                self.solve()
                 n += 1
 
                 violations = dreams.dss.check_violations()
