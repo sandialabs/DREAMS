@@ -28,6 +28,9 @@ class NodalSnapshot():
             capacity_limit=100,
             over_voltage_limit=1.05,
             under_voltage_limit=0.95,
+            mode=None,
+            at_sec=None,
+            save_violations=False,
             ):
 
         self.feeder = feeder
@@ -43,10 +46,32 @@ class NodalSnapshot():
         self.over_voltage_limit = over_voltage_limit
         self.under_voltage_limit = under_voltage_limit
 
+        self.mode = mode
+        self.at_sec = at_sec
+        self.save_violations=save_violations
+
+        if save_violations:
+            self.violations = {}
+
         if run:
             self.result_df = self.run()
         else:
             self.result_df = None
+
+    def solve(self):
+        if self.mode is not None:
+            # handle setting of mode
+            dreams.dss.cmd(f'set mode={self.mode}')
+
+        if self.at_sec is not None:
+            # handle setting of time
+            dreams.dss.cmd('set number=1')
+            dreams.dss.cmd('set stepsize=1')
+            dreams.dss.cmd('set hour=0')
+            dreams.dss.cmd('set min=0')
+            dreams.dss.cmd(f'set sec={int(self.at_sec)}')
+
+        dreams.dss.cmd('solve')
 
     def has_voltage_violation(self):
         violations = dreams.dss.check_violations(
@@ -126,7 +151,7 @@ class NodalSnapshot():
                     f"irradiance=1 vmaxpu=2 vminpu=0.1 %r=0.0 balanced=yes"
                 dreams.dss.cmd(pv_line)
 
-            dreams.dss.cmd('solve')
+            self.solve()
 
             # get bus distance
             dss.Circuit.SetActiveBus(bus_name)
@@ -143,6 +168,8 @@ class NodalSnapshot():
             if violation_flag:
                 non_vhc_kw = 0
                 vhc_kw = 0
+                if self.save_violations:
+                    last_id_violations = self.feeder.id_violations()
             else:
                 # set first expected violation value
                 vhc_kw = effective_max_kw / scale_increase
@@ -167,10 +194,13 @@ class NodalSnapshot():
                     dreams.dss.cmd(pv_line)
                     break
 
-                dreams.dss.cmd('solve')
+                self.solve()
+
                 n += 1
 
                 last_violations = dreams.dss.check_violations()
+                if self.save_violations:
+                    last_id_violations = self.feeder.id_violations()
 
                 if constraint == 'voltage':
                     violation_flag = self.has_voltage_violation()
@@ -203,7 +233,7 @@ class NodalSnapshot():
                     pv_line = f"edit pvsystem.hc_{bus_name} pmpp={mid_point}"
                     dreams.dss.cmd(pv_line)
 
-                dreams.dss.cmd('solve')
+                self.solve()
                 n += 1
 
                 violations = dreams.dss.check_violations()
@@ -216,6 +246,8 @@ class NodalSnapshot():
                 if violation_flag:
                     vhc_kw = mid_point
                     last_violations = violations
+                    if self.save_violations:
+                        last_id_violations = self.feeder.id_violations()
                 else:
                     non_vhc_kw = mid_point
 
@@ -225,6 +257,9 @@ class NodalSnapshot():
             res[bus_name].update(last_violations)
             res[bus_name]['bus_dist_km'] = bus_dist
             bus_n += 1
+
+            if self.save_violations:
+                self.violations[bus_name] = last_id_violations
 
         nodal_results = pd.DataFrame.from_dict(res, orient='index')
 
