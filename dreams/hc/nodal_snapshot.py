@@ -30,6 +30,7 @@ class NodalSnapshot():
             under_voltage_limit=0.95,
             mode=None,
             at_sec=None,
+            save_violations=False,
             ):
 
         self.feeder = feeder
@@ -47,6 +48,10 @@ class NodalSnapshot():
 
         self.mode = mode
         self.at_sec = at_sec
+        self.save_violations=save_violations
+
+        if save_violations:
+            self.violations = {}
 
         if run:
             self.result_df = self.run()
@@ -163,6 +168,8 @@ class NodalSnapshot():
             if violation_flag:
                 non_vhc_kw = 0
                 vhc_kw = 0
+                if self.save_violations:
+                    last_id_violations = self.feeder.id_violations()
             else:
                 # set first expected violation value
                 vhc_kw = effective_max_kw / scale_increase
@@ -192,6 +199,8 @@ class NodalSnapshot():
                 n += 1
 
                 last_violations = dreams.dss.check_violations()
+                if self.save_violations:
+                    last_id_violations = self.feeder.id_violations()
 
                 if constraint == 'voltage':
                     violation_flag = self.has_voltage_violation()
@@ -237,6 +246,8 @@ class NodalSnapshot():
                 if violation_flag:
                     vhc_kw = mid_point
                     last_violations = violations
+                    if self.save_violations:
+                        last_id_violations = self.feeder.id_violations()
                 else:
                     non_vhc_kw = mid_point
 
@@ -246,6 +257,9 @@ class NodalSnapshot():
             res[bus_name].update(last_violations)
             res[bus_name]['bus_dist_km'] = bus_dist
             bus_n += 1
+
+            if self.save_violations:
+                self.violations[bus_name] = last_id_violations
 
         nodal_results = pd.DataFrame.from_dict(res, orient='index')
 
