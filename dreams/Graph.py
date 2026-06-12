@@ -2,72 +2,134 @@
 Class to allow for easier network / graph creation
 """
 
+import opendssdirect as dss
+import os
+import pandas as pd
 import networkx as nx
 import matplotlib.pyplot as plt
-import numpy as np
-import pandas as pd
-
 
 class Graph():
     """
-    Create graph of feeder.
+    Class to create directed graph of feeder based on incidence matrix
     """
     def __init__(
             self,
-            feeder):
+            model_fp,
+            init=True):
 
-        self.feeder = feeder
-        self.G = self.create_simple_graph(feeder)
-        self.is_connected = nx.is_connected(self.G)
+        self.model_fp = model_fp
 
-        self.n_cycles = None
-        self.cycles = None
-        self.node_position = None
+        if init:
+            self.incidence_matrix = self.get_incidence_matrix()
+            self.G = self.get_directed_graph()
 
-        self.upstream_xfmr_df = None
-
-    def create_simple_graph(self, feeder):
+    def get_incidence_matrix(self):
         """
-        Create simple graph using 'short_bus' names.
+        Clears any openDSS direct feeder,
+        Solves system at located model_fp,
+        and returns incidence matrix where the `value` column indicates flow
+        entering bus via pde.
         """
-        mulit_graph = nx.MultiGraph()
+        dss.run_command('clear')
+        dss.run_command(f"""compile "{self.model_fp}" """)  # quotes intentional
+        dss.run_command('solve')
 
-        # add nodes to graph (buses)
-        # makes graph using only short bus... not individual phases.
-        for index, row in feeder.buses.iterrows():
-            node = index
-            node_dict = {
-                'name': index,
-                'kv_base': row['kv_base'],
-                'longitude': row['longitude'],
-                'latitude': row['latitude'],
-                }
-            mulit_graph.add_node(node, attr=node_dict)
+        dss.run_command("calcincmatrix_o")
 
-        # add edges of transformers, lines, switches, reactors. fuses?
-        elements_to_add = {
-            'lines': ['short_bus1', 'short_bus2'],
-            'switches': ['short_bus1', 'short_bus2'],
-            'reactors': ['short_bus1', 'short_bus2'],
-            'transformers': ['short_bus1', 'short_bus2'],
+        paths_to_remove = []
+
+        inc_matrix_fp = dss.run_command("export incmatrix incidence_matrix.csv")
+        inc_matrix = pd.read_csv(inc_matrix_fp)
+        paths_to_remove.append(inc_matrix_fp)
+
+        row_fp = dss.run_command("export incmatrixrow incidence_matrix_row.csv")
+        row_names = pd.read_csv(row_fp)
+        paths_to_remove.append(row_fp)
+
+        col_fp = dss.run_command("export incmatrixcols incidence_matrix_cols.csv")
+        col_names = pd.read_csv(col_fp)
+        paths_to_remove.append(col_fp)
+
+        # remove temporary opendss exports
+        for temp_path in paths_to_remove:
+            if os.path.exists(temp_path):
+                os.remove(temp_path)
+
+        inc_bus_names = col_names.iloc[inc_matrix['Col']]
+        inc_matrix['bus_name'] = inc_bus_names.reset_index(drop=True)
+        inc_matrix['bus_name'] = inc_matrix['bus_name'].astype(str)
+        inc_pde_name = row_names.iloc[inc_matrix['Row']]
+        inc_matrix['pde_name'] = inc_pde_name.reset_index(drop=True)
+
+        # addition to help with per phase graph
+        inc_matrix['bus_nodes'] = ''
+        inc_matrix['n_bus_nodes'] = 0
+        inc_matrix['kv_base'] = 0.0
+
+        for idx, row in inc_matrix.iterrows():
+            bus_name = row['bus_name']
+            dss.Circuit.SetActiveBus(bus_name)
+            inc_matrix.at[idx, 'n_bus_nodes'] = int(dss.Bus.NumNodes())
+            inc_matrix.at[idx, 'bus_nodes'] = dss.Bus.Nodes()
+            inc_matrix.at[idx, 'kv_base'] = float(dss.Bus.kVBase())
+            inc_matrix.at[idx, 'x_coord'] = float(dss.Bus.X())
+            inc_matrix.at[idx, 'y_coord'] = float(dss.Bus.Y())
+
+        return inc_matrix
+
+    def get_directed_graph(self):
+        """
+        Create networkx directed graph from incidence matrix
+
+        ASSERT: feeder used to create incidence matrix is active in dss direct
+        This will be the case if exqecuted immediately after `get_incidence_matrix`
+        """
+        # init graph
+        graph = nx.MultiDiGraph()
+
+        # create nodes
+        bus_names = dss.Circuit.AllBusNames()
+        bus_dict = {}
+        for bus_name in bus_names:
+            dss.Circuit.SetActiveBus(bus_name)
+            bus_dict[bus_name] = {}
+            bus_dict[bus_name]['kv_base'] = float(dss.Bus.kVBase())
+            bus_dict[bus_name]['x_coord'] = float(dss.Bus.X())
+            bus_dict[bus_name]['y_coord'] = float(dss.Bus.Y())
+
+        # add nodes to graph
+        for bus_name, bus_attributes in bus_dict.items():
+            graph.add_node(bus_name, attr=bus_attributes)
+
+        # add edges (if possible) to graph
+        for pde_name, pde_df in self.incidence_matrix.groupby('pde_name'):
+            n_connects = len(pde_df)
+
+            if n_connects == 1:
+                # print(f"Skipping edge {pde_name} - only one connection")
+                continue
+
+            if n_connects > 2:
+                # print(f"Skipping edge {pde_name} - too many connections")
+                # should probably not happen...
+                continue
+
+            sorted_pde = pde_df.sort_values('Value', ascending=False)
+
+            bus_1 = sorted_pde.iloc[0]['bus_name']  # value of 1
+            bus_2 = sorted_pde.iloc[1]['bus_name']  # value of -1
+
+            edge_dict = {
+                'kind': pde_name.split('.')[0],
+                'pde_name': pde_name,
             }
 
-        for element, connections in elements_to_add.items():
-            feeder_df = getattr(feeder, element)
+            graph.add_edge(bus_1, bus_2, attr=edge_dict)
 
-            for _, row in feeder_df.iterrows():
-                connection_1 = row[connections[0]]
-                connection_2 = row[connections[1]]
-                mulit_graph.add_edge(connection_1, connection_2, attr=row)
-
-        return mulit_graph
-
-    def find_all_cycles(self, update_object=True):
-        """
-        Identify all cycles (loops) in graph
-        """
-        graph_copy = self.G.copy()
+        # check for loops
+        graph_copy = graph.copy()
         cycles = []
+
         while True:
             try:
                 cycle = nx.find_cycle(graph_copy)
@@ -76,145 +138,45 @@ class Graph():
                 graph_copy.remove_edge(*cycle[-1])
             except nx.NetworkXNoCycle:
                 break
+        if len(cycles) > 0:
+            print(f"WARNING: directed graph has {len(cycles)} loops!")
 
-        if update_object:
-            self.cycles = cycles
-            self.n_cycles = len(cycles)
+        return graph
 
-        return cycles
-
-    def get_node_position(self, update_object=True):
+    def plot(self, kind='basic'):
         """
-        Function to generate node position dictionary
-        Optionally updates object node_position
+        plot function to allow for more plot type returns
         """
+        if kind == 'basic':
+            return self.plot_basic_graph()
+
+    def plot_basic_graph(
+            self,
+            ):
+        """
+        return basic plot of graph using bus coordinates
+        May not be super helpful, but good confirmation that graph works
+        """
+        fig, ax = plt.subplots()
+
+        graph = self.G
         pos = {}
-        for node in self.G.nodes():
-            x = self.G.nodes[node]['attr']['longitude']
-            y = self.G.nodes[node]['attr']['latitude']
+        for node in graph.nodes():
+            x = graph.nodes[str(node)]['attr']['x_coord']
+            y = graph.nodes[str(node)]['attr']['y_coord']
             pos[node] = (x, y)
 
-        if update_object:
-            self.node_position = pos
+        nx.draw(
+            graph,
+            pos,
+            with_labels=False,
+            node_color='skyblue',
+            node_size=1,
+            edge_color='k',
+            arrows=True,
+            ax=ax)
 
-        return pos
+        plt.axis('off')
+        plt.show()
 
-    def get_upstream_xfmr_kva(
-            self,
-            secondary_kv_limit=1.0,
-            breadth_lim=10,
-            ):
-        """
-        Return (and save to self), upstream transformer kva for all buses
-        except for bus connected to voltage source.
-        Uses breadth first search to find nearest high voltage xfrm bus
-        of secondary buses.
-        assumes max transformer is limit for primary connected buses.
-        """
-        xfmr_lim_res = {}
-        max_kva = self.feeder.transformers['kva'].max()
-        vs_bus = self.feeder.voltage_sources['short_bus1'].values[0]
-
-        for index, bus_row in self.feeder.buses.iterrows():
-            if index == vs_bus:
-                # skip voltage source bus
-                continue
-
-            n = 1
-            # handle primary
-            xfmr_lim_res[index] = {}
-            xfmr_lim_res[index]['n_phases'] = bus_row['n_phases']
-            xfmr_lim_res[index]['phases'] = bus_row['phases']
-            xfmr_lim_res[index]['kv_base'] = bus_row['kv_base']
-
-            if bus_row['primary']:
-                xfmr_lim_res[index]['upstream_xfmr'] = np.nan
-                xfmr_lim_res[index]['upstream_xfmr_kva'] = max_kva
-                xfmr_lim_res[index]['breadth_n'] = np.nan
-                continue
-
-            for edge in nx.bfs_edges(self.G, bus_row.name, breadth_lim):
-                found_edge = np.nan
-                next_node = edge[1]
-                next_node_kv = self.G.nodes[next_node]['attr']['kv_base']
-
-                if next_node_kv > secondary_kv_limit:
-                    found_edge = edge
-                    break
-                n += 1
-
-            xfmr_mask = self.feeder.transformers['short_bus2'] == found_edge[0]
-
-            if sum(xfmr_mask) == 0:
-                print(f'WARNING: upstream sum(xfmr_mask) = 0 {found_edge}')
-            upstream_xfmr = self.feeder.transformers[xfmr_mask]
-            upstream_xfmr_name = upstream_xfmr.index[0]
-            upstream_xfmr_kva = upstream_xfmr.normhkva.min()
-
-            xfmr_lim_res[index]['upstream_xfmr'] = upstream_xfmr_name
-            xfmr_lim_res[index]['upstream_xfmr_kva'] = upstream_xfmr_kva
-            xfmr_lim_res[index]['breadth_n'] = n
-
-        upstream_xfmr_df = pd.DataFrame.from_dict(xfmr_lim_res, orient='index')
-        self.upstream_xfmr_df = upstream_xfmr_df
-
-        return upstream_xfmr_df
-
-    def plot(
-            self,
-            substation_name=None,
-            show_cycles=False,
-            ):
-        """
-        Plot graph using feeder coordinates.
-        Optionally plot the substation if the node name is provded.
-        Optionally plot cycles longer than 2 edges
-        """
-
-        if self.node_position is None:
-            pos = self.get_node_position(self)
-        else:
-            pos = self.node_position
-
-        if show_cycles:
-            if self.cycles is None:
-                cycles = self.find_all_cycles()
-            else:
-                cycles = self.cycles
-
-        # standard draw.
-        fig = plt.figure()
-        ax = fig.add_subplot(111)
-
-        if show_cycles:
-            longer_cycles = [x for x in cycles if len(x) > 2]
-            for n in longer_cycles:
-                nx.draw_networkx_edges(
-                    self.G,
-                    pos,
-                    ax=ax,
-                    edgelist=n,
-                    width=4,
-                    alpha=1,
-                    edge_color="tab:red",
-                )
-
-        nx.draw(self.G, pos, node_size=0, ax=ax)
-
-        if substation_name is not None:
-            if substation_name in self.G.nodes:
-                # substation plot
-                nx.draw_networkx_nodes(
-                    self.G,
-                    pos,
-                    ax=ax,
-                    nodelist=[substation_name],
-                    node_size=30,
-                    alpha=1,
-                    node_color='green',
-                    edgecolors="black",
-                )
-            else:
-                print(f"'{substation_name}' not found in graph nodes")
-
-        return (fig, ax)
+        return fig, ax
