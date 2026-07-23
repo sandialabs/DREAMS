@@ -27,5 +27,6 @@ from .read_scenario import read_qsts_scenario
 
 from .nodal_snapshot import NodalSnapshot
 
+from . import interp  # folder for qsts interpolation
 # nested imports
 # of the form: from . import fileName
