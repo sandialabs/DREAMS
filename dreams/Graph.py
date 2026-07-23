@@ -18,10 +18,13 @@ class Graph():
             init=True):
 
         self.model_fp = model_fp
+        initial_wd = os.getcwd()
 
         if init:
             self.incidence_matrix = self.get_incidence_matrix()
             self.G = self.get_directed_graph()
+
+        os.chdir(initial_wd)
 
     def get_incidence_matrix(self):
         """

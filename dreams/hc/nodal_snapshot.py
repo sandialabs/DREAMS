@@ -39,6 +39,11 @@ class NodalSnapshot():
         self.constraint = constraint
         self.execution_time = 0.0
         self.threshold = threshold
+
+        # ensure one or the other always
+        if hc_kind != 'load':
+            hc_kind = 'gen'
+
         self.hc_kind = hc_kind
         self.name = name
 
@@ -259,7 +264,11 @@ class NodalSnapshot():
             bus_n += 1
 
             if self.save_violations:
-                self.violations[bus_name] = last_id_violations
+                try:
+                    self.violations[bus_name] = last_id_violations
+                except UnboundLocalError:
+                    # to handle case of max limit
+                    self.violations[bus_name] = None
 
         nodal_results = pd.DataFrame.from_dict(res, orient='index')
 

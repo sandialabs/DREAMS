@@ -282,6 +282,9 @@ def get_capacity_df():
     # ensure all lower
     capacity_df.columns = [x.lower() for x in capacity_df.columns]
     #  capacity_df.index.rename('name', inplace=True)
+    # calcualte remaining and norm amps
+    capacity_df['normamps_est'] = (capacity_df['imax']*100)/ capacity_df['%normal']
+    capacity_df['remaining_amps'] = capacity_df['normamps_est'] - capacity_df['imax']
 
     os.remove(capacity_csv_path)
     # opendssdirect functions may change working directory
