@@ -22,10 +22,11 @@ from .qsts import plot_seed_storage
 from .qsts import plot_seed_generator
 from .qsts import plot_seed_violations
 
-from .animate import get_line_flow_key
-from .animate import plot_feeder_flow
-from .animate import plot_feeder_violations
-from .animate import make_feeder_flow_animation
+# NOTE: issue with contextily import of ssl keys...
+# from .animate import get_line_flow_key
+# from .animate import plot_feeder_flow
+# from .animate import plot_feeder_violations
+# from .animate import make_feeder_flow_animation
 
 # nested imports
 # of the form: from . import folder

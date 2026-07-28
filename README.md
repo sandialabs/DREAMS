@@ -27,12 +27,12 @@ conda create -n <ENV NAME> python=3.10.6
 conda activate <ENV NAME> 
 ```
 
-2. Execute `pip install -e .` from main repo directory to install 
-package and allow modifications to be applied to the code without 
-re-installation.
+2. Navigate terminal to main repository directory.
 
-4. Execute `conda install ipykernel` so that Jupyter Notebook demos 
-can run.
+3. Execute `pip install -e .`
+
+<!-- 4. Execute `conda install ipykernel` so that Jupyter Notebook demos 
+can run. NOTE: should now be automatically handled in the setup.cfg -->
 
 ## Usage
 * See ipynb files in demos folder.
