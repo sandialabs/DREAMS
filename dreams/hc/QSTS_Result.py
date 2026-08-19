@@ -17,6 +17,8 @@ class QSTSStepResult():
     Collects PV information (if available)
 
     Can do plotting at this stage - if desired...
+
+    # TODO - handle bus voltages and element capacities
     """
     def __init__(
             self,
@@ -26,6 +28,7 @@ class QSTSStepResult():
             system_statistics=None,
             violations=None,
             bus_voltages=None,
+            capacities=None,
             ) -> None:
 
         self.scenario = scenario
@@ -33,7 +36,17 @@ class QSTSStepResult():
         self.seed = seed
         self.step = step
         self.raw_violations = violations
-        self.bus_voltages = bus_voltages
+
+        # combine bus voltages
+        if bus_voltages is not None:
+            self.bus_voltages = self.combined_bus_voltages(bus_voltages)
+        else:
+            self.bus_voltages = bus_voltages
+
+        if capacities is not None:
+            self.capacities = self.combine_capacities(capacities)
+        else:
+            self.capacities = capacities
 
         # handle output name
         output_name = scenario.name
@@ -99,7 +112,7 @@ class QSTSStepResult():
         self.violation_counts = violations[count_columns]
 
         # handle monitors into extremes dictionary
-        self.monitors = dreams.monitor.collect_monitors()
+        self.monitors = dreams.monitor.collect_monitors(self.scenario.qsts_origin)  # added correct qsts orign
 
         # handle pv (if it exists)
         self.collect_pv_data()
@@ -631,6 +644,13 @@ class QSTSStepResult():
 
         return file_name
 
+    def combined_bus_voltages(self):
+        # combine collected bus voltages into nicer form
+        pass
+
+    def combine_capacities(self):
+        # combine capacities into nicer form
+        pass
 
     def plot(self, kind='power', **kwargs):
         """
