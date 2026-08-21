@@ -644,13 +644,61 @@ class QSTSStepResult():
 
         return file_name
 
-    def combined_bus_voltages(self):
-        # combine collected bus voltages into nicer form
-        pass
+    def combined_bus_voltages(self, bus_voltages):
+        """
+        combine voltages from all steps into dataset
+        """
+        clean_bus_v = {}
+        cols_to_keep = ['v1', 'v2', 'v3', 'distance', 'kv_base']
 
-    def combine_capacities(self):
-        # combine capacities into nicer form
-        pass
+        for step, bus_df in bus_voltages.items():
+            clean_bus_df = bus_df[cols_to_keep]
+            clean_bus_df = clean_bus_df.reset_index()
+            clean_bus_v[step] = clean_bus_df
+
+        df_long = pd.concat(clean_bus_v, names=['step']).reset_index(level='step')
+        df_long = df_long.set_index(['step', 'name'])
+        # NOTE: step is really QSTS step in this context
+
+        # convert to dataset
+        ds = df_long.to_xarray()
+
+        # remove static variables connection to time
+        static_dist = ds["distance"].isel(step=0) # assert same type for all time
+        ds = ds.drop_vars("distance")
+        ds = ds.assign_coords(distance=("name", static_dist.values))
+
+        kv_base = ds["kv_base"].isel(step=0) # assert same type for all time
+        ds = ds.drop_vars("kv_base")
+        ds = ds.assign_coords(kv_base=("name", kv_base.values))
+
+        return ds
+
+    def combine_capacities(self, capacities):
+        """
+        combine capacities for all elements from all steps into xarray dataset
+        """
+        clean_caps = {}
+        # clean up dictionaries
+        for step, cap_df in capacities.items():
+            # clean_cap_df = cap_df.set_index('longname')
+            clean_cap_df = cap_df[['longname', 'type', r'%normal', r'%emergency']]
+            clean_caps[step] = clean_cap_df
+
+        # combine dataframes into single long dataframe
+        df_long = pd.concat(clean_caps, names=['step']).reset_index(level='step')
+        df_long = df_long.set_index(['step', 'longname'])
+        # NOTE: step is really QSTS step in this context
+
+        # convert to dataset
+        ds = df_long.to_xarray()
+
+        # remove type connection to step (time) coordinate
+        type_static = ds["type"].isel(step=0) # assert same type for all time
+        ds = ds.drop_vars("type")
+        ds = ds.assign_coords(kind=("longname", type_static.values))
+
+        return ds
 
     def plot(self, kind='power', **kwargs):
         """
@@ -680,6 +728,14 @@ class QSTSStepResult():
                 **kwargs)
         elif kind == 'violations':
             return dreams.pyplt.qsts.plot_step_violation(
+                self,
+                **kwargs)
+        elif kind == 'all_xfmr':
+            return dreams.pyplt.qsts.plot_step_all_xfmr_capacity(
+                self,
+                **kwargs)
+        elif kind == 'all_line':
+            return dreams.pyplt.qsts.plot_step_all_line_capacity(
                 self,
                 **kwargs)
         else:

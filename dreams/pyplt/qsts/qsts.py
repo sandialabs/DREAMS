@@ -629,7 +629,6 @@ def plot_step_transformer_capacity(
 
     return (fig, axes)
 
-
 def plot_step_pv_contribution(
         step_result,
         use_dt=False,
@@ -1355,3 +1354,103 @@ def plot_seed_violations(
     plt.tight_layout()
 
     return (fig, axes)
+
+def plot_step_all_xfmr_capacity(
+        step_result,
+        # use_dt=False,
+        include_limits=True,
+        include_seed_step=False,
+        n_bins=10,
+        **kwargs):
+    """
+    Use element function to create hexbin plot of all transformer capacities
+    """
+    capacities = step_result.capacities
+
+    cmap = cmr.torch_r
+    cmap = cmr.get_sub_cmap(cmap, 0.2, .9, N=n_bins)
+
+    xfmr_caps = capacities.where(capacities.kind=='transformer', drop=True).to_dataframe().reset_index().set_index('step')
+
+    x_bins = xfmr_caps.index.max() + 1
+    y_bins = np.ceil(xfmr_caps['%normal'].max())
+    if y_bins < 100:
+        y_bins = 100
+
+    ax = xfmr_caps.reset_index().plot(
+        kind='hexbin', x='step', y="%normal",
+        colormap=cmap, mincnt=1, label='Count',
+        )
+    ax.grid()
+    ax.set_axisbelow(True)
+    ax.set_xlim([0, x_bins])
+    ax.set_ylim([0, y_bins+5])
+
+    ax.set_ylabel('Used Normal Capacity [%]')
+    ax.set_xlabel('QSTS Step')
+
+    ax.grid(color='lightgray')
+    if include_limits:
+        ax.hlines([100], 0, x_bins, linestyle=':', color=[.4, .4, .4], zorder=0)
+
+    if include_seed_step:
+        ax.set_title(
+            f"Transformer Counts of Used Capacity\n"
+            f"Seed {step_result.seed}, Step {step_result.step}"
+            )
+    else:
+        ax.set_title('Transformer Counts of Used Capacity')
+
+    fig = ax.get_figure()
+    plt.tight_layout()
+    return (fig, ax)
+
+def plot_step_all_line_capacity(
+        step_result,
+        # use_dt=False,
+        include_limits=True,
+        include_seed_step=False,
+        n_bins=10,
+        **kwargs):
+    """
+    Use element function to create hexbin plot of all line capacities
+    """
+    capacities = step_result.capacities
+
+    cmap = cmr.torch_r
+    cmap = cmr.get_sub_cmap(cmap, 0.2, .9, N=n_bins)
+
+    line_caps = capacities.where(capacities.kind=='line', drop=True).to_dataframe().reset_index().set_index('step')
+
+    x_bins = line_caps.index.max() + 1
+    y_bins = np.ceil(line_caps['%normal'].max())
+    if y_bins < 100:
+        y_bins = 100
+
+    ax = line_caps.reset_index().plot(
+        kind='hexbin', x='step', y="%normal",
+        colormap=cmap, mincnt=1, label='Count',
+        )
+    ax.grid()
+    ax.set_axisbelow(True)
+    ax.set_xlim([0, x_bins])
+    ax.set_ylim([0, y_bins+5])
+
+    ax.set_ylabel('Used Normal Capacity [%]')
+    ax.set_xlabel('QSTS Step')
+
+    ax.grid(color='lightgray')
+    if include_limits:
+        ax.hlines([100], 0, x_bins, linestyle=':', color=[.4, .4, .4], zorder=0)
+
+    if include_seed_step:
+        ax.set_title(
+            f"Line Counts of Used Capacity\n"
+            f"Seed {step_result.seed}, Step {step_result.step}"
+            )
+    else:
+        ax.set_title('Line Counts of Used Capacity')
+
+    fig = ax.get_figure()
+    plt.tight_layout()
+    return (fig, ax)

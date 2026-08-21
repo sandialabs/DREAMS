@@ -147,24 +147,33 @@ class NodalSnapshot():
 
 
     def check_adaptive_bus_violations(self):
-        # check bus voltages excluding known violation
+        # check bus voltages excluding known violations
         voltage_cols = ['v1', 'v2', 'v3']
         vdf = dreams.dss.get_bus_voltage_df()
 
-        # NOTE: this could lead to a situation where a previously violating
-        # bus could be missed in the 'opposite' type of violation...
-        known_v_mask = vdf.index.isin(self.violating_buses.index)      
-        std_v_mask = ~known_v_mask
+        # handle known over voltages
+        if 'over_voltage' in self.violating_buses['v_kind'].values:
+            # identify known violating buses and remove from intial check
+            ov_mask = self.violating_buses['v_kind'] == 'over_voltage'
+            known_ov_mask = vdf.index.isin(self.violating_buses[ov_mask].index)
+            over_voltages = vdf[~known_ov_mask][voltage_cols] > self.over_voltage_limit
+        else:
+            over_voltages = vdf[voltage_cols] > self.over_voltage_limit
 
-        over_voltages = vdf[std_v_mask][voltage_cols] > self.over_voltage_limit
-        under_voltages = vdf[std_v_mask][voltage_cols] < self.under_voltage_limit
+        # handle known under voltages
+        if 'under_voltage' in self.violating_buses['v_kind'].values:
+            # identify known violating buses and remove from intial check
+            uv_mask = self.violating_buses['v_kind'] == 'under_voltage'
+            known_uv_mask = vdf.index.isin(self.violating_buses[uv_mask].index)
+            under_voltages = vdf[~known_uv_mask][voltage_cols] < self.under_voltage_limit
+        else:
+            under_voltages = vdf[voltage_cols] < self.under_voltage_limit
 
         has_ov = over_voltages.sum().sum() > 0
         has_uv = under_voltages.sum().sum() > 0
 
         if has_ov or has_uv:
-            # valid violations identified
-            # probably return true or something
+            # valid 'new' violations identified
             return True
 
         # check known violating buses
@@ -172,7 +181,6 @@ class NodalSnapshot():
         for bus_name, bus_row in self.violating_buses.iterrows():
             v_row = vdf.loc[[bus_name]]
 
-            # check known violating buses
             if bus_row['v_kind'] == 'over_voltage':
                 has_vio = (v_row[voltage_cols] > bus_row['new_threshold']).sum().sum() > 0
             else:
