@@ -28,6 +28,9 @@ class NodalSnapshot():
             capacity_limit=100,
             over_voltage_limit=1.05,
             under_voltage_limit=0.95,
+            adaptive_violations=False,
+            voltage_buffer=0.03, # VPU
+            thermal_buffer=5, # capacity percent
             mode=None,
             at_sec=None,
             save_violations=False,
@@ -55,6 +58,13 @@ class NodalSnapshot():
         self.at_sec = at_sec
         self.save_violations=save_violations
 
+        # adaptive violation paramaters
+        self.adaptive_violations = adaptive_violations
+        self.voltage_buffer = voltage_buffer
+        self.thermal_buffer = thermal_buffer
+        self.violating_buses = None
+        self.violating_thermal_elements = None
+
         if save_violations:
             self.violations = {}
 
@@ -78,30 +88,169 @@ class NodalSnapshot():
 
         dreams.dss.cmd('solve')
 
+    def id_existing_bus_violations(self):
+        """
+        Identify existing bus voltage violations for adaptive violations
+
+        creates dataframe of violating buses and attaches to self
+        """
+        # identify violations
+        voltage_cols = ['v1', 'v2', 'v3']
+        vdf = dreams.dss.get_bus_voltage_df()
+
+        # check for under voltage
+        uv_mask = vdf[voltage_cols] < self.under_voltage_limit
+        uv_mask = uv_mask.sum(axis=1) > 0
+
+        # generation hc - check for over voltage
+        ov_mask = vdf[voltage_cols] > self.over_voltage_limit
+        ov_mask = ov_mask.sum(axis=1) > 0
+
+        violating_buses = {}
+
+        # create look up for later checks with old and new voltages
+        if sum(ov_mask) > 0:
+            # has over voltages
+            for bus_name, bus_row in vdf[ov_mask].iterrows():
+                violating_buses[bus_name] = {}
+                violating_buses[bus_name]['original_v'] = bus_row[voltage_cols].max()
+                violating_buses[bus_name]['new_threshold'] = bus_row[voltage_cols].max() + self.voltage_buffer
+                violating_buses[bus_name]['v_kind'] = 'over_voltage'
+
+        if sum(uv_mask) > 0:
+            # has under voltages
+            for bus_name, bus_row in vdf[uv_mask].iterrows():
+                violating_buses[bus_name] = {}
+                violating_buses[bus_name]['original_v'] = bus_row[voltage_cols].min()
+                violating_buses[bus_name]['new_threshold'] = bus_row[voltage_cols].min() - self.voltage_buffer
+                violating_buses[bus_name]['v_kind'] = 'under_voltage'
+
+        violating_buses_df = pd.DataFrame.from_dict(violating_buses, orient='index')
+        self.violating_buses = violating_buses_df
+
+
+    def id_existing_thermal_violations(self):
+        # identify existing thermal violations
+        capacity = dreams.dss.get_capacity_df()
+        capacity.set_index('longname', inplace=True)
+        oc_mask = capacity[r'%normal'] > self.capacity_limit
+
+        # creat look up for later checks
+        violating_elements = {}
+        for long_name, cap_row in capacity[oc_mask].iterrows():
+            violating_elements[long_name] = {}
+            violating_elements[long_name]['original_capacity'] = cap_row['%normal']
+            violating_elements[long_name]['new_threshold'] = cap_row['%normal'] + self.thermal_buffer
+
+        violating_elements_df = pd.DataFrame.from_dict(violating_elements, orient='index')
+        self.violating_thermal_elements = violating_elements_df
+
+
+    def check_adaptive_bus_violations(self):
+        # check bus voltages excluding known violations
+        voltage_cols = ['v1', 'v2', 'v3']
+        vdf = dreams.dss.get_bus_voltage_df()
+
+        # handle known over voltages
+        if 'over_voltage' in self.violating_buses['v_kind'].values:
+            # identify known violating buses and remove from intial check
+            ov_mask = self.violating_buses['v_kind'] == 'over_voltage'
+            known_ov_mask = vdf.index.isin(self.violating_buses[ov_mask].index)
+            over_voltages = vdf[~known_ov_mask][voltage_cols] > self.over_voltage_limit
+        else:
+            over_voltages = vdf[voltage_cols] > self.over_voltage_limit
+
+        # handle known under voltages
+        if 'under_voltage' in self.violating_buses['v_kind'].values:
+            # identify known violating buses and remove from intial check
+            uv_mask = self.violating_buses['v_kind'] == 'under_voltage'
+            known_uv_mask = vdf.index.isin(self.violating_buses[uv_mask].index)
+            under_voltages = vdf[~known_uv_mask][voltage_cols] < self.under_voltage_limit
+        else:
+            under_voltages = vdf[voltage_cols] < self.under_voltage_limit
+
+        has_ov = over_voltages.sum().sum() > 0
+        has_uv = under_voltages.sum().sum() > 0
+
+        if has_ov or has_uv:
+            # valid 'new' violations identified
+            return True
+
+        # check known violating buses
+        has_vio = False
+        for bus_name, bus_row in self.violating_buses.iterrows():
+            v_row = vdf.loc[[bus_name]]
+
+            if bus_row['v_kind'] == 'over_voltage':
+                has_vio = (v_row[voltage_cols] > bus_row['new_threshold']).sum().sum() > 0
+            else:
+                # under voltage
+                has_vio = (v_row[voltage_cols] < bus_row['new_threshold']).sum().sum() > 0
+
+            if has_vio:
+                return has_vio
+
+        return has_vio
+
+
+    def check_adapative_thermal_violations(self):
+        # check normally non-violating system
+        capacity = dreams.dss.get_capacity_df()
+        capacity.set_index('longname', inplace=True)
+
+        known_v_mask = capacity.index.isin(self.violating_thermal_elements.index)      
+        std_v_mask = ~known_v_mask
+
+        over_capacity_mask = capacity[std_v_mask][r'%normal'] > self.capacity_limit
+        if sum(over_capacity_mask) > 0:
+            return True
+
+        # check adaptive violation elements
+        has_vio = False
+        for long_name, element_row in self.violating_thermal_elements.iterrows():
+            cap_row = capacity.loc[[long_name]]
+
+            if sum(cap_row[r'%normal'] > element_row['new_threshold']) > 0:
+                return True
+
+        return has_vio
+
+
     def has_voltage_violation(self):
-        violations = dreams.dss.check_violations(
-            self.capacity_limit,
-            self.over_voltage_limit,
-            self.under_voltage_limit
-            )
-        over_voltage = violations['over_voltage']
-        under_voltage = violations['under_voltage']
-        return over_voltage or under_voltage
+        if self.adaptive_violations and (self.violating_buses is not None):
+            return self.check_adaptive_bus_violations()
+
+        else:
+            violations = dreams.dss.check_violations(
+                self.capacity_limit,
+                self.over_voltage_limit,
+                self.under_voltage_limit
+                )
+            over_voltage = violations['over_voltage']
+            under_voltage = violations['under_voltage']
+            return over_voltage or under_voltage
 
     def has_thermal_violation(self):
-        violations = dreams.dss.check_violations(
-            self.capacity_limit,
-            self.over_voltage_limit,
-            self.under_voltage_limit
-            )
-        line_overload = violations['line_overload']
-        xfmr_overload = violations['xfmr_overload']
-        return line_overload or xfmr_overload
+        if self.adaptive_violations and (self.violating_thermal_elements is not None):
+            return self.check_adapative_thermal_violations()
+
+        else:
+            violations = dreams.dss.check_violations(
+                self.capacity_limit,
+                self.over_voltage_limit,
+                self.under_voltage_limit
+                )
+            line_overload = violations['line_overload']
+            # accomodate for no xfmr model
+            if 'xfmr_overload' in violations:
+                xfmr_overload = violations['xfmr_overload']
+            else:
+                xfmr_overload = False
+            return line_overload or xfmr_overload
 
     def run(self):
         """"
         execute nodal hosting capacity, return results and store to self.
-        does sort of a mix between certain scaling and midpoint reductions.
         """
         start_time = time.process_time()
         scale_increase = 2
@@ -112,7 +261,7 @@ class NodalSnapshot():
         else:
             buses_to_test = self.feeder.buses.loc[self.bus_names].copy()
 
-        # handle constraints...
+        # handle constraints.
         if self.constraint is None:
             self.constraint = 'voltage'
 
@@ -123,7 +272,7 @@ class NodalSnapshot():
             print(f"ERROR: constraint '{constraint}' not valid")
 
         total_buses = len(buses_to_test)
-        print(f"Started {constraint} constrained hosting capacity")
+        print(f"Started {constraint} constrained {self.hc_kind} hosting capacity")
 
         effective_max_kw = self.effective_max_kw
         res = {}
@@ -170,11 +319,23 @@ class NodalSnapshot():
                 violation_flag = self.has_thermal_violation()
 
             # handle case of small load causing violations
-            if violation_flag:
+            if violation_flag and (not self.adaptive_violations):
                 non_vhc_kw = 0
                 vhc_kw = 0
                 if self.save_violations:
                     last_id_violations = self.feeder.id_violations()
+
+            elif violation_flag and self.adaptive_violations:
+                # identify violating element(s) on first run.
+                if self.constraint == 'voltage':
+                    self.id_existing_bus_violations()
+                else:
+                    self.id_existing_thermal_violations()
+
+                # reset flag and set first violating hc value
+                violation_flag = False
+                vhc_kw = effective_max_kw / scale_increase
+
             else:
                 # set first expected violation value
                 vhc_kw = effective_max_kw / scale_increase

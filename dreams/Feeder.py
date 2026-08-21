@@ -69,7 +69,7 @@ class Feeder:
         # this is for qsts monitor redirect saving
         self.monitor_redirect = None
 
-        self.is_solved = dreams.dss.solve_system(self.path)
+        self.is_solved = dreams.dss.solve_system(self.path, load_multiplier=load_mult)
 
         # this is for the HC part.
         self.scenarios = []
@@ -138,7 +138,7 @@ class Feeder:
         Relaod original feeder file, return boolena of convergence.
         """
         dreams.dss.cmd('clear all')
-        dreams.dss.solve_system(self.path)
+        dreams.dss.solve_system(self.path, load_multiplier=self.load_mult)
         return dssdirect.Solution.Converged()
 
     def id_violations(self):

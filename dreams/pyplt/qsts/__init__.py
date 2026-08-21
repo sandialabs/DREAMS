@@ -22,6 +22,9 @@ from .qsts import plot_seed_storage
 from .qsts import plot_seed_generator
 from .qsts import plot_seed_violations
 
+from .qsts import plot_step_all_xfmr_capacity
+from .qsts import plot_step_all_line_capacity
+
 # NOTE: issue with contextily import of ssl keys...
 # from .animate import get_line_flow_key
 # from .animate import plot_feeder_flow

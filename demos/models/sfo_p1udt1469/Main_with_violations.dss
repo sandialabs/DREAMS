@@ -1,0 +1,31 @@
+Clear
+New Circuit.feeder_p1udt1469-p1uhs0_1247x
+
+Redirect Vsource.dss
+Redirect LineCode.dss
+Redirect Branches.dss
+Redirect Transformers.dss
+Redirect Loads.dss
+Redirect Capacitors.dss
+Redirect EnergyMeter.dss
+Redirect BusVoltageBases.dss  ! set voltage bases
+Buscoords BusCoords.dss
+
+! new load for single over capacity
+New Load.over_capacity_xfmr Bus1=p1ulv1492.1.2 Phases=2 Model=1 kV=0.208 kW=10 
+
+! modify vsource for single under voltage caused by load
+// edit vsource.source pu=1.0
+// New Load.under_voltage_bus Bus1=p1ulv573.1.2 Phases=2 Model=1 kV=0.208 kW=15 
+
+! modify vsource for single over voltage caused by capacitor
+// edit vsource.source pu=1.049
+// New Capacitor.over_voltage_cap bus1=p1udt847 phases=3 kv=12.47 conn=Wye kvar=1.75e3
+
+! extreme issues high voltage
+// edit vsource.source pu=1.04
+// New Capacitor.over_voltage_cap bus1=p1umv8 phases=3 kv=12.47 conn=Wye kvar=7e3
+
+! many issues low voltage
+edit vsource.source pu=1.0
+New Load.under_voltage_bus Bus1=p1ulv573.1.2 Phases=2 Model=1 kV=0.208 kW=150 

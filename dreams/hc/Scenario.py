@@ -41,6 +41,7 @@ class Scenario():
             step_labels=None,  # for plot lables
             step_title=None,  # for legend title
             collect_bus_v=False,
+            collect_capacities=False,
             ):
         self.name = name
         self.feeder = feeder
@@ -87,6 +88,8 @@ class Scenario():
         self.control_redirects = {}
 
         self.collect_bus_v = collect_bus_v
+        self.collect_capacities = collect_capacities
+
 
         # add any base redirects to scenario
         if path_to_base_redirects is not None:
@@ -946,6 +949,11 @@ class Scenario():
                 else:
                     bus_voltages = None
 
+                if self.collect_capacities:
+                    capacities = {}
+                else:
+                    capacities = None
+
                 step_append = ''
                 for qsts_step in list(range(0, self.n_qsts_steps + 1, 1)):
                     print(f"\rQSTS Step {qsts_step}/{self.n_qsts_steps + 1}  ({qsts_step/(self.n_qsts_steps + 1) * 100:.2f}% complete)  ", end='', flush=True)
@@ -967,6 +975,8 @@ class Scenario():
 
                     if self.collect_bus_v:
                         bus_voltages[qsts_step] = dreams.dss.get_bus_voltage_df()
+                    if self.collect_capacities:
+                        capacities[qsts_step] = dreams.dss.get_capacity_df()
 
                 print(f"\rQSTS Step {qsts_step+1}/{self.n_qsts_steps + 1}  ({(qsts_step+1)/(self.n_qsts_steps + 1) * 100:.2f}% complete)  ")
 
@@ -980,7 +990,8 @@ class Scenario():
                     step,
                     system_statistics=system_statistics,
                     violations=violations,
-                    bus_voltages=bus_voltages
+                    bus_voltages=bus_voltages,
+                    capacities=capacities,
                     )
 
                 # if step == 0:
