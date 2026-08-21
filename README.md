@@ -38,6 +38,7 @@ can run. NOTE: should now be automatically handled in the setup.cfg -->
 * See ipynb files in demos folder.
 
 ## Studies Employing DREAMS
+* [Large Load Impacts to Distribution System Hosting Capacity](https://www.osti.gov/biblio/3365795)
 * [QSTS Simulation of Centralized PV and Controlled Storage on a Distribution System using Python](https://doi.org/10.1109/PESGM52009.2025.11225534)
 * [Optimizing Distributed Energy Storage Sizing in Puerto Rico: Leveraging Increased Distributed Generation for Enhanced Resilience](https://doi.org/10.2172/2585558)
 * [Puerto Rico Grid Resilience and Transitions to 100% Renewable Energy Study (PR100): Final Report - Chapter 11, Distribution System Impacts](https://doi.org/10.2172/2335361)
